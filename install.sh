@@ -1,8 +1,30 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
-REPO="jneb802/mmcli"
-INSTALL_DIR="/usr/local/bin"
+REPO="${MMCLI_REPO:-jneb802/mod-manager-cli}"
+DEFAULT_INSTALL_DIR="$HOME/.local/bin"
+
+choose_install_dir() {
+  if [ -n "${MMCLI_INSTALL_DIR:-}" ]; then
+    echo "$MMCLI_INSTALL_DIR"
+    return
+  fi
+
+  existing="$(command -v mmcli 2>/dev/null || true)"
+  if [ -n "$existing" ] && [ ! -L "$existing" ] && [ -w "$existing" ] && [ -w "$(dirname "$existing")" ]; then
+    dirname "$existing"
+    return
+  fi
+
+  echo "$DEFAULT_INSTALL_DIR"
+}
+
+path_contains() {
+  case ":$PATH:" in
+    *":$1:"*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # Detect architecture
 ARCH=$(uname -m)
@@ -24,16 +46,41 @@ echo "Latest version: $TAG"
 # Download
 URL="https://github.com/$REPO/releases/download/$TAG/$BINARY"
 TMPFILE=$(mktemp)
+trap 'rm -f "$TMPFILE"' EXIT
 echo "Downloading $BINARY..."
 curl -fsSL -o "$TMPFILE" "$URL"
 
 # Install
 chmod +x "$TMPFILE"
-echo "Installing to $INSTALL_DIR/mmcli (may require sudo)..."
-if [ -w "$INSTALL_DIR" ]; then
-  mv "$TMPFILE" "$INSTALL_DIR/mmcli"
-else
-  sudo mv "$TMPFILE" "$INSTALL_DIR/mmcli"
+INSTALL_DIR="$(choose_install_dir)"
+mkdir -p "$INSTALL_DIR"
+
+if [ ! -w "$INSTALL_DIR" ]; then
+  echo "Install directory is not writable: $INSTALL_DIR"
+  echo "Choose a user-writable directory with:"
+  echo "  curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | MMCLI_INSTALL_DIR=\"\$HOME/.local/bin\" bash"
+  exit 1
 fi
 
-echo "mmcli installed successfully! Run 'mmcli init' to get started."
+echo "Installing to $INSTALL_DIR/mmcli..."
+mv "$TMPFILE" "$INSTALL_DIR/mmcli"
+trap - EXIT
+
+echo "mmcli installed successfully."
+
+if ! path_contains "$INSTALL_DIR"; then
+  echo
+  echo "Add this directory to your PATH so your shell can find mmcli:"
+  echo "  export PATH=\"$INSTALL_DIR:\$PATH\""
+fi
+
+CURRENT="$(command -v mmcli 2>/dev/null || true)"
+if [ -n "$CURRENT" ] && [ "$CURRENT" != "$INSTALL_DIR/mmcli" ]; then
+  echo
+  echo "Note: your shell currently finds mmcli at:"
+  echo "  $CURRENT"
+  echo "If that is an older copy, put $INSTALL_DIR earlier in PATH or remove the old copy."
+fi
+
+echo
+echo "Run 'mmcli init' to get started."
