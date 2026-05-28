@@ -67,9 +67,9 @@ type modsState struct {
 	preflightFetching bool
 
 	// Scope picker (remove only)
-	scopePicker                          bool
+	scopePicker                           bool
 	scopeLocal, scopeServer, scopeModpack bool
-	scopeCursor                          int // 0=local, 1=server, 2=modpack
+	scopeCursor                           int // 0=local, 1=server, 2=modpack
 
 	err       error
 	statusMsg string // transient success message (cleared on next action)
@@ -78,13 +78,13 @@ type modsState struct {
 // --- Audit row (moved from sync.go) ---
 
 type auditRow struct {
-	Name           string
-	LocalVersion      string
-	ServerVersion     string
-	ServerRuntimeVer  string // BepInEx-reported version (may differ from manifest)
-	ModpackVersion    string
-	Target            string
-	Anticheat         string
+	Name             string
+	LocalVersion     string
+	ServerVersion    string
+	ServerRuntimeVer string // BepInEx-reported version (may differ from manifest)
+	ModpackVersion   string
+	Target           string
+	Anticheat        string
 }
 
 func (m model) buildAuditRows() []auditRow {
@@ -461,7 +461,12 @@ func (m model) viewProfilePicker() string {
 		}
 		fmt.Fprintf(&b, "  %s%s%s\n", cursor, name, active)
 	}
-	b.WriteString("\n  \033[2m↑/↓ navigate • enter select • n new profile • esc back\033[0m\n\n")
+	if m.mods.err != nil {
+		fmt.Fprintf(&b, "\n  \033[31mError: %v\033[0m\n", m.mods.err)
+	} else if m.mods.statusMsg != "" {
+		fmt.Fprintf(&b, "\n  \033[32m%s\033[0m\n", m.mods.statusMsg)
+	}
+	b.WriteString("\n  \033[2m↑/↓ navigate • enter select • n new profile • d delete profile • esc back\033[0m\n\n")
 	return b.String()
 }
 
@@ -1008,6 +1013,23 @@ func (m model) handleModsProfilePicker(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.mods.creatingProfile = true
 		m.mods.newProfileInput = ""
 		m.mods.err = nil
+	case "d":
+		if len(m.mods.profiles) == 0 {
+			return m, nil
+		}
+		name := m.mods.profiles[m.mods.profileCursor]
+		if name == m.cfg.ActiveProfile {
+			m.mods.err = fmt.Errorf("cannot delete active profile '%s'. Switch to another profile first", name)
+			return m, nil
+		}
+		m.confirm = confirmModal{
+			Active: true,
+			Prompt: fmt.Sprintf("Delete profile %s and all its files?", name),
+			OnYes: func(m model) (tea.Model, tea.Cmd) {
+				return m.deleteProfileFromPicker(name)
+			},
+		}
+		m.mods.err = nil
 	}
 	return m, nil
 }
@@ -1083,6 +1105,35 @@ func (m model) openProfilePicker() (tea.Model, tea.Cmd) {
 		}
 	}
 	m.mods.pickProfile = true
+	m.mods.err = nil
+	return m, nil
+}
+
+func (m model) deleteProfileFromPicker(name string) (tea.Model, tea.Cmd) {
+	if err := profile.Delete(m.paths, m.cfg, name); err != nil {
+		m.mods.err = err
+		return m, nil
+	}
+
+	delete(m.reg.Profiles, name)
+	delete(m.reg.Settings, name)
+	if err := config.SaveRegistry(m.paths, *m.reg); err != nil {
+		m.mods.err = err
+		return m, nil
+	}
+
+	profiles, err := profile.List(m.paths)
+	if err != nil {
+		m.mods.err = err
+		return m, nil
+	}
+	m.mods.profiles = profiles
+	if len(m.mods.profiles) == 0 {
+		m.mods.profileCursor = 0
+	} else if m.mods.profileCursor >= len(m.mods.profiles) {
+		m.mods.profileCursor = len(m.mods.profiles) - 1
+	}
+	m.mods.statusMsg = fmt.Sprintf("Profile '%s' deleted.", name)
 	m.mods.err = nil
 	return m, nil
 }
