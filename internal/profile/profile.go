@@ -2,12 +2,15 @@ package profile
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"mmcli/internal/config"
 )
+
+var renamePath = os.Rename
 
 // Create creates a new profile directory with plugins/ and config/ subdirectories.
 // If a source profile exists, it copies BepInEx.cfg to the new profile.
@@ -179,11 +182,80 @@ func migrateContents(src, dst string) error {
 		if _, err := os.Stat(dstPath); err == nil {
 			continue
 		}
-		if err := os.Rename(srcPath, dstPath); err != nil {
+		if err := movePath(srcPath, dstPath); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func movePath(src, dst string) error {
+	if err := renamePath(src, dst); err == nil {
+		return nil
+	} else {
+		renameErr := err
+		if err := copyPath(src, dst); err != nil {
+			return fmt.Errorf("rename failed (%v), copy fallback failed: %w", renameErr, err)
+		}
+		if err := os.RemoveAll(src); err != nil {
+			return fmt.Errorf("rename failed (%v), remove source after copy failed: %w", renameErr, err)
+		}
+	}
+	return nil
+}
+
+func copyPath(src, dst string) error {
+	info, err := os.Lstat(src)
+	if err != nil {
+		return err
+	}
+
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, err := os.Readlink(src)
+		if err != nil {
+			return err
+		}
+		return os.Symlink(target, dst)
+	}
+
+	if info.IsDir() {
+		if err := os.MkdirAll(dst, info.Mode().Perm()); err != nil {
+			return err
+		}
+		if err := copyDirContents(src, dst); err != nil {
+			return err
+		}
+		return os.Chmod(dst, info.Mode().Perm())
+	}
+
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("unsupported file type: %s", src)
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(out, in)
+	closeErr := out.Close()
+	if copyErr != nil {
+		_ = os.Remove(dst)
+		return copyErr
+	}
+	if closeErr != nil {
+		_ = os.Remove(dst)
+		return closeErr
+	}
+	return os.Chmod(dst, info.Mode().Perm())
 }
 
 func writeDoorstopConfig(paths config.Paths, name string) error {
@@ -219,23 +291,7 @@ func copyDirContents(src, dst string) error {
 	for _, entry := range entries {
 		srcPath := filepath.Join(src, entry.Name())
 		dstPath := filepath.Join(dst, entry.Name())
-		if entry.IsDir() {
-			if err := os.MkdirAll(dstPath, 0755); err != nil {
-				return err
-			}
-			if err := copyDirContents(srcPath, dstPath); err != nil {
-				return err
-			}
-			continue
-		}
-		data, err := os.ReadFile(srcPath)
-		if err != nil {
-			return err
-		}
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(dstPath, data, 0644); err != nil {
+		if err := copyPath(srcPath, dstPath); err != nil {
 			return err
 		}
 	}

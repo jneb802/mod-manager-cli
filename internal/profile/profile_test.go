@@ -172,3 +172,48 @@ func TestCreateProfileCopiesBepInExCfg(t *testing.T) {
 		t.Error("copied BepInEx.cfg content mismatch")
 	}
 }
+
+func TestMigrateContentsFallsBackToCopyWhenRenameFails(t *testing.T) {
+	tmp := t.TempDir()
+	src := filepath.Join(tmp, "src")
+	dst := filepath.Join(tmp, "dst")
+	if err := os.MkdirAll(filepath.Join(src, "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(dst, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "BepInEx.cfg"), []byte("config"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "nested", "mod.cfg"), []byte("mod"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	originalRename := renamePath
+	renamePath = func(oldpath, newpath string) error {
+		return os.ErrInvalid
+	}
+	t.Cleanup(func() { renamePath = originalRename })
+
+	if err := migrateContents(src, dst); err != nil {
+		t.Fatalf("migrateContents failed: %v", err)
+	}
+
+	for _, path := range []string{
+		filepath.Join(dst, "BepInEx.cfg"),
+		filepath.Join(dst, "nested", "mod.cfg"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("missing migrated file %s: %v", path, err)
+		}
+	}
+	for _, path := range []string{
+		filepath.Join(src, "BepInEx.cfg"),
+		filepath.Join(src, "nested"),
+	} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("source path should be removed after copy: %s", path)
+		}
+	}
+}
