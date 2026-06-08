@@ -166,8 +166,9 @@ func PatchRunScript(paths config.Paths) error {
 
 	content := string(data)
 
-	// Set executable_name to valheim.app
-	content = replaceScriptVar(content, "executable_name", "valheim.app")
+	// Match Steam's macOS app bundle name exactly. Case-sensitive volumes fail
+	// if the script uses valheim.app while the bundle is Valheim.app.
+	content = replaceScriptVar(content, "executable_name", "Valheim.app")
 
 	// Comment out the arch detection case block — it rejects Apple Silicon binaries.
 	// The block starts with `case "${file_out}" in` and ends with `esac`.
