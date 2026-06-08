@@ -39,15 +39,9 @@ func StartGameProcess(workDir, target, logPath string) (*exec.Cmd, int, *os.File
 	cmd.Dir = workDir
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
-	var lf *os.File
-	if logPath != "" {
-		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-		if err != nil {
-			return nil, 0, nil, fmt.Errorf("open log file: %w", err)
-		}
-		cmd.Stdout = f
-		cmd.Stderr = f
-		lf = f
+	lf, err := attachProcessOutput(cmd, logPath)
+	if err != nil {
+		return nil, 0, nil, err
 	}
 
 	if err := cmd.Start(); err != nil {
