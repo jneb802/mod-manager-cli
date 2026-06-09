@@ -12,8 +12,8 @@ var jsonOutput bool
 
 var rootCmd = &cobra.Command{
 	Use:   "mmcli",
-	Short: "Valheim mod manager for macOS",
-	Long:  "A CLI tool for managing BepInEx mods, profiles, and game launching for Valheim on macOS.",
+	Short: "Valheim mod manager for macOS and Linux",
+	Long:  "A CLI tool for managing BepInEx mods, profiles, and game launching for Valheim on macOS and Linux.",
 }
 
 func Execute() {
