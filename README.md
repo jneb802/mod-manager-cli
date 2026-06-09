@@ -4,7 +4,7 @@
 
 # mmcli
 
-A command-line Valheim mod manager for macOS. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/), manages profiles, and launches the game with BepInEx.
+A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/), manages profiles, and launches the game with BepInEx.
 
 ## Install
 
@@ -30,12 +30,13 @@ brew install jneb802/tap/mmcli
 
 ### Manual download
 
-Download the latest binary from [Releases](https://github.com/jneb802/mod-manager-cli/releases), then:
+Download the latest binary for your platform from [Releases](https://github.com/jneb802/mod-manager-cli/releases), then:
 
 ```
 mkdir -p ~/.local/bin
-chmod +x mmcli-darwin-*
-mv mmcli-darwin-* ~/.local/bin/mmcli
+binary=mmcli-linux-amd64 # or mmcli-darwin-arm64 / mmcli-darwin-amd64
+chmod +x "$binary"
+mv "$binary" ~/.local/bin/mmcli
 ```
 
 ## Getting Started

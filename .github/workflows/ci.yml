@@ -20,6 +20,7 @@ jobs:
         run: |
           GOOS=darwin GOARCH=arm64 go build -o dist/mmcli-darwin-arm64 -ldflags "-X mmcli/cmd.Version=ci" .
           GOOS=darwin GOARCH=amd64 go build -o dist/mmcli-darwin-amd64 -ldflags "-X mmcli/cmd.Version=ci" .
+          GOOS=linux GOARCH=amd64 go build -o dist/mmcli-linux-amd64 -ldflags "-X mmcli/cmd.Version=ci" .
           GOOS=linux GOARCH=amd64 go build -o dist/mmcli-agent-linux-amd64 -ldflags "-X main.Version=ci" ./cmd/agent
 
       - name: Run tests

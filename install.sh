@@ -26,12 +26,14 @@ path_contains() {
   esac
 }
 
-# Detect architecture
+# Detect platform
+OS=$(uname -s)
 ARCH=$(uname -m)
-case "$ARCH" in
-  arm64) BINARY="mmcli-darwin-arm64" ;;
-  x86_64) BINARY="mmcli-darwin-amd64" ;;
-  *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
+case "$OS/$ARCH" in
+  Darwin/arm64) BINARY="mmcli-darwin-arm64" ;;
+  Darwin/x86_64) BINARY="mmcli-darwin-amd64" ;;
+  Linux/x86_64) BINARY="mmcli-linux-amd64" ;;
+  *) echo "Unsupported platform: $OS/$ARCH"; exit 1 ;;
 esac
 
 # Get latest release tag
