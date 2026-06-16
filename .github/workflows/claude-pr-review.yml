@@ -1,0 +1,122 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main]
+
+concurrency:
+  group: claude-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Review PR
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - name: Check out PR
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code@2.1.178
+
+      - name: Direct Claude review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "GitHub workflow token was not available."
+            exit 1
+          fi
+
+          CLAUDE_BIN="$(command -v claude || true)"
+          if [ ! -x "${CLAUDE_BIN}" ]; then
+            echo "Claude CLI was not installed."
+            exit 1
+          fi
+
+          mkdir -p .claude-review
+          gh pr view "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --json number,title,body,headRefName,baseRefName,commits,files \
+            > .claude-review/pr.json
+          gh pr diff "${PR_NUMBER}" --repo "${REPO}" > .claude-review/diff.patch
+
+          cat > .claude-review/prompt.md <<'PROMPT'
+          Review this pull request for behavior bugs introduced by the diff.
+          Follow CLAUDE.md and REVIEW.md.
+
+          Read these files before posting:
+          - .claude-review/pr.json
+          - .claude-review/diff.patch
+
+          Do not modify files, create commits, or push branches.
+          Do not attempt a full build if the runner is missing required private dependencies, secrets, services, or local SDKs.
+          Write exactly one PR review comment body.
+          Start with either `No blocking issues found.` or `Blocking issues found.`
+          PROMPT
+
+          set +e
+          "${CLAUDE_BIN}" -p "$(cat .claude-review/prompt.md)" \
+            --max-turns 6 \
+            --allowedTools "Read" \
+            --output-format json \
+            --no-session-persistence \
+            > .claude-review/claude.json \
+            2> .claude-review/claude.err
+          claude_status=$?
+          set -e
+
+          if [ "${claude_status}" -ne 0 ]; then
+            echo "Claude CLI failed with exit code ${claude_status}."
+            if [ -s .claude-review/claude.json ]; then
+              echo "Claude CLI stdout:"
+              sed -E \
+                -e 's/(sk-ant-[A-Za-z0-9_-]+)/[REDACTED]/g' \
+                -e 's/(oauth[_A-Za-z0-9.-]{16,})/[REDACTED]/g' \
+                .claude-review/claude.json
+            else
+              echo "Claude CLI did not write stdout."
+            fi
+            if [ -s .claude-review/claude.err ]; then
+              echo "Claude CLI stderr:"
+              sed -E \
+                -e 's/(sk-ant-[A-Za-z0-9_-]+)/[REDACTED]/g' \
+                -e 's/(oauth[_A-Za-z0-9.-]{16,})/[REDACTED]/g' \
+                .claude-review/claude.err
+            else
+              echo "Claude CLI did not write stderr."
+            fi
+            exit "${claude_status}"
+          fi
+
+          jq -r '.result // empty' .claude-review/claude.json > .claude-review/comment.md
+
+          if [ ! -s .claude-review/comment.md ]; then
+            echo "Claude produced an empty review comment."
+            sed -E \
+              -e 's/(sk-ant-[A-Za-z0-9_-]+)/[REDACTED]/g' \
+              -e 's/(oauth[_A-Za-z0-9.-]{16,})/[REDACTED]/g' \
+              .claude-review/claude.json
+            exit 1
+          fi
+
+          gh pr comment "${PR_NUMBER}" \
+            --repo "${REPO}" \
+            --body-file .claude-review/comment.md
