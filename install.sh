@@ -5,7 +5,8 @@ REPO="${MMCLI_REPO:-jneb802/mod-manager-cli}"
 DEFAULT_INSTALL_DIR="$HOME/.local/bin"
 
 choose_install_dir() {
-  local existing dir old_ifs
+  local existing dir
+  local -a path_dirs
 
   if [ -n "${MMCLI_INSTALL_DIR:-}" ]; then
     echo "$MMCLI_INSTALL_DIR"
@@ -18,16 +19,13 @@ choose_install_dir() {
     return
   fi
 
-  old_ifs="$IFS"
-  IFS=":"
-  for dir in ${PATH:-}; do
+  IFS=":" read -r -a path_dirs <<< "${PATH:-}"
+  for dir in "${path_dirs[@]}"; do
     if [ -n "$dir" ] && [ "${dir#/}" != "$dir" ] && [ -d "$dir" ] && [ -w "$dir" ]; then
-      IFS="$old_ifs"
       echo "$dir"
       return
     fi
   done
-  IFS="$old_ifs"
 
   echo "$DEFAULT_INSTALL_DIR"
 }
@@ -79,7 +77,7 @@ add_to_shell_profile() {
 
   if [ -f "$profile" ] && grep -F "$line" "$profile" >/dev/null 2>&1; then
     echo "$profile"
-    return 0
+    return 2
   fi
 
   if [ -e "$profile" ] && [ ! -w "$profile" ]; then
@@ -153,8 +151,15 @@ else
     echo "Restart your terminal, or run this now:"
     echo "  source \"$PROFILE\""
   else
-    echo "Add this directory to your PATH so your shell can find mmcli:"
-    echo "  export PATH=$(shell_quote "$INSTALL_DIR"):\$PATH"
+    profile_status=$?
+    if [ "$profile_status" -eq 2 ] && [ -n "${PROFILE:-}" ]; then
+      echo "$INSTALL_DIR is already configured in PATH in $PROFILE."
+      echo "Restart your terminal, or run this now:"
+      echo "  source \"$PROFILE\""
+    else
+      echo "Add this directory to your PATH so your shell can find mmcli:"
+      echo "  export PATH=$(shell_quote "$INSTALL_DIR"):\$PATH"
+    fi
   fi
   echo
   echo "You can also run mmcli immediately with:"
