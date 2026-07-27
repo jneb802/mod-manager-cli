@@ -14,13 +14,15 @@ A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thun
 curl -fsSL https://raw.githubusercontent.com/jneb802/mod-manager-cli/main/install.sh | bash
 ```
 
-The installer uses a user-writable location and does not require a password. It updates an existing writable `mmcli` install, or installs to `~/.local/bin`.
+The installer uses a user-writable location and does not require a password. It updates an existing writable `mmcli` install, installs to a writable directory already on your `PATH`, or installs to `~/.local/bin`.
 
-If your shell cannot find `mmcli` after installation, add this to your shell profile:
+If it installs to `~/.local/bin` and your shell cannot find `mmcli`, the installer adds this to your shell profile:
 
 ```
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+Restart your terminal, or run the `source` command printed by the installer.
 
 ### Homebrew
 
