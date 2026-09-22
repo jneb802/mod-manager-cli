@@ -90,5 +90,22 @@ mmcli profile switch <name>
 mmcli profile list
 mmcli profile delete <name>
 mmcli profile import <url|code>   # import from r2modman/Thunderstore profile code
+mmcli profile import <file.r2z>   # import from an r2modman profile export file
 mmcli profile open                # open profile folder in Finder
 ```
+
+### Importing an r2modman profile
+
+A profile can be imported either from a profile code or from an r2modman export
+file. The file form is useful when the profile was exported to disk, when it is
+larger than the 20MB the profile code service accepts, or when a shared code has
+expired.
+
+```
+mmcli profile import ./full-valheim.r2z        # keeps the name from the export
+mmcli profile import myprofile ./export.r2z    # overrides the profile name
+```
+
+Both `.r2z` archives and bare `.r2x` manifests are accepted. Mods are installed
+at the versions pinned by the export, mods the export marks as disabled stay
+disabled, and config files travel with a `.r2z`.
