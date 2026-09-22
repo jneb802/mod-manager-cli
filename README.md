@@ -4,7 +4,7 @@
 
 # mmcli
 
-A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/), manages profiles, and launches the game with BepInEx.
+A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/) and [Hexium](https://valheim.hexium.gg), manages profiles, and launches the game with BepInEx.
 
 ## Install
 
@@ -72,6 +72,18 @@ mmcli install RandyKnapp-EpicLoot
 ```
 
 Dependencies are resolved and installed automatically.
+
+Both Thunderstore and Hexium are searched, so mods that are only published on
+one of them install the same way. A package URL from either site works too:
+
+```
+mmcli install https://thunderstore.io/c/valheim/p/RandyKnapp/EpicLoot/
+mmcli install https://valheim.hexium.gg/mods/Azumatt/AzuAutoStore
+```
+
+When both registries carry a mod, the higher version is used, so
+`mmcli check-updates` reports a newer Hexium build of a mod that also exists on
+Thunderstore.
 
 ## Managing Mods
 

@@ -108,7 +108,11 @@ func InstallVersion(paths config.Paths, cfg config.Config, reg *config.Registry,
 	}
 
 	// Install the main mod
-	fmt.Printf("Installing %s...\n", fullName)
+	if pkg.Source != "" && pkg.Source != "Thunderstore" {
+		fmt.Printf("Installing %s from %s...\n", fullName, pkg.Source)
+	} else {
+		fmt.Printf("Installing %s...\n", fullName)
+	}
 	files, err := downloadAndExtract(paths, cfg, pkg)
 	if err != nil {
 		return fmt.Errorf("failed to install %s: %w", fullName, err)
