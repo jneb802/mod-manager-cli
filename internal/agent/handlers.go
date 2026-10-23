@@ -865,8 +865,10 @@ func (h *Handlers) HandleSettingsUpdate(w http.ResponseWriter, r *http.Request) 
 	// Write permission files if updated
 	if req.Admins != nil {
 		saveDir := h.resolveSaveDir()
-		if err := writePermissionFile(filepath.Join(saveDir, "adminlist.txt"), settings.Admins); err != nil {
-			log.Printf("Warning: failed to write adminlist.txt: %v", err)
+		admins := mergeAdminIDs(settings.Admins, h.cfg.PersistentAdmins)
+		if err := writePermissionFile(filepath.Join(saveDir, "adminlist.txt"), admins); err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to write adminlist.txt: "+err.Error())
+			return
 		}
 	}
 
@@ -1206,6 +1208,9 @@ func (h *Handlers) resolveSaveDir() string {
 	// Try parsing current start script for savedir
 	settings, err := ParseStartScript(h.cfg.ResolvedStartScript())
 	if err == nil && settings.SaveDir != "" {
+		if !filepath.IsAbs(settings.SaveDir) {
+			return filepath.Join(h.cfg.ValheimDir, settings.SaveDir)
+		}
 		return settings.SaveDir
 	}
 	// Default Valheim save location on Linux
@@ -1533,6 +1538,9 @@ func (h *Handlers) rebuildStartScript(settings *agentapi.SettingsResponse) error
 	}
 
 	content := RebuildStartScript(ps, settings)
+	if err := h.cfg.ensurePersistentAdmins(settings.SaveDir); err != nil {
+		return err
+	}
 
 	dir := filepath.Dir(scriptPath)
 	tmp, err := os.CreateTemp(dir, ".mmcli-script-*.sh")

@@ -50,6 +50,15 @@ func (pm *ProcessManager) Start() error {
 	if _, err := os.Stat(scriptPath); os.IsNotExist(err) {
 		return fmt.Errorf("start script not found: %s", scriptPath)
 	}
+	if len(pm.cfg.PersistentAdmins) > 0 {
+		settings, err := ParseStartScript(scriptPath)
+		if err != nil {
+			return fmt.Errorf("resolve persistent admin save directory: %w", err)
+		}
+		if err := pm.cfg.ensurePersistentAdmins(settings.SaveDir); err != nil {
+			return err
+		}
+	}
 
 	// Archive previous session logs before overwriting
 	logPath := pm.cfg.ValheimDir + "/mmcli-agent-server.log"

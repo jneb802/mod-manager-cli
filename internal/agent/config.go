@@ -20,6 +20,7 @@ type AgentConfig struct {
 	ModAPIPort         int                   `json:"mod_api_port,omitempty"`
 	ActiveLaunchConfig string                `json:"active_launch_config,omitempty"`
 	ActiveProfile      string                `json:"active_profile,omitempty"`
+	PersistentAdmins   []string              `json:"persistent_admins,omitempty"`
 	DiscordWebhook     *DiscordWebhookConfig `json:"discord_webhook,omitempty"`
 }
 
