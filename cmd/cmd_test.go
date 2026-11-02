@@ -26,6 +26,7 @@ func TestAllCommandsRegistered(t *testing.T) {
 		"config",
 		"server",
 		"modpack",
+		"bepinex",
 	}
 
 	commands := make(map[string]bool)

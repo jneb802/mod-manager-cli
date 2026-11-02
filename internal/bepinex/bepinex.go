@@ -86,10 +86,22 @@ func Download(paths config.Paths, downloadURL, version string) (string, error) {
 	return zipPath, nil
 }
 
+// legacyDoorstopLib is the root-level Doorstop library that BepInExPack shipped
+// for macOS before 5.4.2360. It was x86_64 only, which is why mmcli used to
+// force Rosetta.
+const legacyDoorstopLib = "libdoorstop.dylib"
+
+// macDoorstopLib is the Doorstop library that the 5.4.2360+ start script loads
+// on macOS. Despite the name it is a universal build (x86_64 and arm64).
+var macDoorstopLib = filepath.Join("doorstop_libs", "libdoorstop_x64.dylib")
+
 // Install extracts the BepInEx zip into the Valheim directory.
 // Strips the "BepInExPack_Valheim/" prefix and skips metadata files.
 // Removes any dangling symlinks from a previous mmcli install first.
-func Install(paths config.Paths, zipPath string) error {
+// An existing BepInEx.cfg is kept so re-installing does not reset the user's
+// BepInEx settings. On Windows the BepInEx/ tree is written into each of the
+// given profiles; other platforms ignore profiles.
+func Install(paths config.Paths, zipPath string, profiles []string) error {
 	// Clean up dangling symlinks left from previous profile symlinks
 	removeDanglingSymlinks(paths.BepInExDir())
 
@@ -133,27 +145,50 @@ func Install(paths config.Paths, zipPath string) error {
 			continue
 		}
 
-		destPath := installDestPath(paths, name)
+		for _, destPath := range installDestPaths(paths, name, profiles) {
+			if f.FileInfo().IsDir() {
+				os.MkdirAll(destPath, 0755)
+				continue
+			}
 
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(destPath, 0755)
-			continue
-		}
+			if baseName == "BepInEx.cfg" {
+				if _, err := os.Stat(destPath); err == nil {
+					continue
+				}
+			}
 
-		if err := extractFile(f, destPath); err != nil {
-			return fmt.Errorf("failed to extract %s: %w", name, err)
+			if err := extractFile(f, destPath); err != nil {
+				return fmt.Errorf("failed to extract %s: %w", name, err)
+			}
 		}
 	}
 
+	return removeLegacyDoorstop(paths)
+}
+
+// removeLegacyDoorstop deletes the old root-level macOS Doorstop library once
+// the universal one from doorstop_libs/ is in place.
+func removeLegacyDoorstop(paths config.Paths) error {
+	if runtime.GOOS != "darwin" {
+		return nil
+	}
+	if _, err := os.Stat(filepath.Join(paths.ValheimDir, macDoorstopLib)); err != nil {
+		return nil
+	}
+	err := os.Remove(filepath.Join(paths.ValheimDir, legacyDoorstopLib))
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove %s: %w", legacyDoorstopLib, err)
+	}
 	return nil
 }
 
-// PatchRunScript patches run_bepinex.sh for macOS Apple Silicon compatibility.
-// The stock BepInExPack script fails on ARM Macs for two reasons:
-//  1. The arch detection case block rejects non-x86/x64 binaries
-//  2. The launch uses bare `exec` instead of forcing x86_64 via Rosetta
+// PatchRunScript points run_bepinex.sh at Steam's macOS app bundle. The stock
+// script defaults executable_name to the Linux binary name.
 //
-// This function applies the same patches as a known-working macOS install.
+// Nothing else is changed. Since BepInExPack 5.4.2360 the stock script launches
+// the game through `arch` using its archpreference setting (native arm64 first,
+// Rosetta as fallback) and loads a universal Doorstop library, so Valheim runs
+// natively on Apple Silicon.
 func PatchRunScript(paths config.Paths) error {
 	if runtime.GOOS != "darwin" {
 		return nil
@@ -164,96 +199,16 @@ func PatchRunScript(paths config.Paths) error {
 		return fmt.Errorf("run_bepinex.sh not found: %w", err)
 	}
 
-	content := string(data)
-
 	// Match Steam's macOS app bundle name exactly. Case-sensitive volumes fail
 	// if the script uses valheim.app while the bundle is Valheim.app.
-	content = replaceScriptVar(content, "executable_name", "Valheim.app")
-
-	// Comment out the arch detection case block — it rejects Apple Silicon binaries.
-	// The block starts with `case "${file_out}" in` and ends with `esac`.
-	// Then hardcode arch="x64" since we force Rosetta (the commented-out block
-	// is where arch was originally set, so without this doorstop_name resolves
-	// to "libdoorstop_.dylib" which doesn't exist).
-	content = commentOutArchCheck(content)
-	content = replaceScriptVar(content, "arch", "x64")
-
-	// Replace the stock `exec "$executable_path" $rest_args` launch with an
-	// `arch -x86_64 zsh` wrapper that re-exports the doorstop env vars and
-	// forces Rosetta. This is required because libdoorstop has no ARM build.
-	content = replaceExecWithArchWrapper(content)
+	content := replaceScriptVar(string(data), "executable_name", "Valheim.app")
 
 	return os.WriteFile(scriptPath, []byte(content), 0755)
 }
 
-// commentOutArchCheck comments out the `case "${file_out}" in ... esac` block
-// that checks binary architecture, since it rejects Apple Silicon executables.
-func commentOutArchCheck(content string) string {
-	lines := strings.Split(content, "\n")
-	inBlock := false
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-
-		// Already commented out — nothing to do
-		if strings.HasPrefix(trimmed, "# case \"${file_out}\"") {
-			return content
-		}
-
-		if strings.HasPrefix(trimmed, "case \"${file_out}\"") {
-			inBlock = true
-		}
-		if inBlock && !strings.HasPrefix(trimmed, "#") {
-			lines[i] = "# " + line
-		}
-		if inBlock && trimmed == "esac" {
-			lines[i] = "# " + line
-			break
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-// replaceExecWithArchWrapper replaces the stock exec launch line with an
-// `arch -x86_64 zsh -c` wrapper that re-exports doorstop environment variables
-// and forces the game to run under Rosetta 2.
-func replaceExecWithArchWrapper(content string) string {
-	// If already patched (contains "arch -x86_64 zsh"), skip
-	if strings.Contains(content, "arch -x86_64 zsh") {
-		return content
-	}
-
-	wrapper := `# Wrap the launch command in arch -x86_64 (libdoorstop has no Apple Silicon build)
-current_path=$(pwd)
-exports="export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH\";export LD_PRELOAD=$LD_PRELOAD;export DYLD_LIBRARY_PATH=\"$DYLD_LIBRARY_PATH\";export DYLD_INSERT_LIBRARIES=\"$DYLD_INSERT_LIBRARIES\""
-cdir="cd \"$current_path\""
-exec="\"${executable_path}\""
-a="\"$rest_args\""
-launch="arch;$cdir;pwd;$exports;$exec $a"
-echo "Wrapping x86_64 Launch Command: $launch"
-arch -x86_64 zsh -c "$launch"`
-
-	// Replace the stock exec line: `exec "$executable_path" $rest_args`
-	lines := strings.Split(content, "\n")
-	var result []string
-	for _, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		// Match both active and shellcheck-disabled exec lines
-		if strings.HasPrefix(trimmed, "exec \"$executable_path\"") ||
-			strings.HasPrefix(trimmed, "exec \"${executable_path}\"") {
-			// Comment out the stock exec and append wrapper
-			result = append(result, "# "+line)
-			result = append(result, "")
-			result = append(result, wrapper)
-			continue
-		}
-		result = append(result, line)
-	}
-	return strings.Join(result, "\n")
-}
-
 // RemoveQuarantine strips the com.apple.quarantine extended attribute from the
 // Valheim directory. Downloaded files are tagged by macOS Gatekeeper and
-// quarantined dylibs (like libdoorstop.dylib) are silently blocked from loading.
+// quarantined dylibs (like the Doorstop library) are silently blocked from loading.
 func RemoveQuarantine(paths config.Paths) error {
 	if runtime.GOOS != "darwin" {
 		return nil
@@ -272,7 +227,7 @@ func MakeExecutable(paths config.Paths) error {
 	}
 	files := []string{
 		paths.RunBepInExScript(),
-		filepath.Join(paths.ValheimDir, "libdoorstop.dylib"),
+		filepath.Join(paths.ValheimDir, macDoorstopLib),
 	}
 	for _, f := range files {
 		if _, err := os.Stat(f); err == nil {
@@ -303,16 +258,20 @@ func extractFile(f *zip.File, destPath string) error {
 	return err
 }
 
-func installDestPath(paths config.Paths, name string) string {
+func installDestPaths(paths config.Paths, name string, profiles []string) []string {
 	if runtime.GOOS != "windows" {
-		return filepath.Join(paths.ValheimDir, name)
+		return []string{filepath.Join(paths.ValheimDir, name)}
 	}
 
 	trimmed := strings.TrimPrefix(filepath.ToSlash(name), "./")
 	if trimmed == "BepInEx" || strings.HasPrefix(trimmed, "BepInEx/") {
-		return filepath.Join(paths.ProfileDir("default"), filepath.FromSlash(trimmed))
+		dests := make([]string, 0, len(profiles))
+		for _, p := range profiles {
+			dests = append(dests, filepath.Join(paths.ProfileDir(p), filepath.FromSlash(trimmed)))
+		}
+		return dests
 	}
-	return filepath.Join(paths.ValheimDir, filepath.FromSlash(trimmed))
+	return []string{filepath.Join(paths.ValheimDir, filepath.FromSlash(trimmed))}
 }
 
 // removeDanglingSymlinks removes symlinks in a directory that point to non-existent targets.
@@ -335,11 +294,13 @@ func removeDanglingSymlinks(dir string) {
 	}
 }
 
+// replaceScriptVar sets a top-level variable in a shell script. Indented
+// assignments are left alone because they are runtime logic, such as the start
+// script taking executable_name from its first argument.
 func replaceScriptVar(content, varName, value string) string {
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, varName+"=") {
+		if strings.HasPrefix(line, varName+"=") {
 			lines[i] = fmt.Sprintf(`%s="%s"`, varName, value)
 		}
 	}
