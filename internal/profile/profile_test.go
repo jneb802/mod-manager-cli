@@ -48,6 +48,38 @@ func TestCreateProfileDuplicate(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsPathNames(t *testing.T) {
+	paths := testPaths(t)
+	for _, name := range []string{"", " ", ".", "..", "../outside", "/absolute", `..\outside`, `C:\outside`, "nested/profile", "trailing.", "trailing "} {
+		if err := Create(paths, name); err == nil {
+			t.Errorf("accepted invalid profile name %q", name)
+		}
+	}
+	if _, err := os.Stat(paths.ProfilesDir); !os.IsNotExist(err) {
+		t.Fatal("invalid profile names created directories")
+	}
+	if err := Create(paths, "Valid Profile Name"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestCreateRejectsDanglingProfileSymlink(t *testing.T) {
+	paths := testPaths(t)
+	if err := os.MkdirAll(paths.ProfilesDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "not-created")
+	if err := os.Symlink(outside, paths.ProfileDir("linked")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if err := Create(paths, "linked"); err == nil {
+		t.Fatal("accepted dangling profile symlink")
+	}
+	if _, err := os.Stat(outside); !os.IsNotExist(err) {
+		t.Fatal("created profile outside the profile root")
+	}
+}
+
 func TestListProfiles(t *testing.T) {
 	paths := testPaths(t)
 

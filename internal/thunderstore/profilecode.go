@@ -7,12 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 )
 
 const profileCodeAPI = baseURL + "/api/experimental/legacyprofile/get/"
+
+// profileDataPrefix is the header r2modman puts in front of the base64 zip.
+const profileDataPrefix = "#r2modman"
 
 var profileCodeRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
@@ -47,20 +52,74 @@ func FetchProfileCode(code string) (string, []ProfileMod, []byte, error) {
 	}
 
 	data := string(body)
-	if !strings.HasPrefix(data, "#r2modman") {
-		return "", nil, nil, fmt.Errorf("invalid profile code data: missing #r2modman header")
+	if !strings.HasPrefix(data, profileDataPrefix) {
+		return "", nil, nil, fmt.Errorf("invalid profile code data: missing %s header", profileDataPrefix)
 	}
 
-	b64 := strings.TrimSpace(data[len("#r2modman"):])
+	b64 := strings.TrimSpace(data[len(profileDataPrefix):])
 	zipData, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to decode profile data: %w", err)
 	}
 
-	// Read export.r2x from the zip
+	profileName, mods, err := parseProfileZip(zipData)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return profileName, mods, zipData, nil
+}
+
+// IsProfileFile reports whether s names an r2modman profile export file.
+// r2modman writes .r2z (a zip holding export.r2x plus config files) and older
+// versions wrote a bare .r2x (the export manifest on its own).
+func IsProfileFile(s string) bool {
+	switch strings.ToLower(filepath.Ext(s)) {
+	case ".r2z", ".r2x":
+		return true
+	}
+	return false
+}
+
+// ReadProfileFile reads an r2modman profile export from disk and returns the
+// profile name, list of mods, and the raw zip data (for config extraction).
+// The zip data is nil for a bare .r2x file, which carries no config files.
+func ReadProfileFile(path string) (string, []ProfileMod, []byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to read profile file: %w", err)
+	}
+
+	if strings.EqualFold(filepath.Ext(path), ".r2x") {
+		profileName, mods, err := parseR2X(string(data))
+		if err != nil {
+			return "", nil, nil, err
+		}
+		return profileName, mods, nil, nil
+	}
+
+	// A profile code payload that was saved to disk still carries the
+	// "#r2modman" header and base64 body, so accept that shape too.
+	if strings.HasPrefix(string(data), profileDataPrefix) {
+		b64 := strings.TrimSpace(string(data)[len(profileDataPrefix):])
+		decoded, err := base64.StdEncoding.DecodeString(b64)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("failed to decode profile data: %w", err)
+		}
+		data = decoded
+	}
+
+	profileName, mods, err := parseProfileZip(data)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return profileName, mods, data, nil
+}
+
+// parseProfileZip reads export.r2x out of a .r2z archive and parses it.
+func parseProfileZip(zipData []byte) (string, []ProfileMod, error) {
 	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 	if err != nil {
-		return "", nil, nil, fmt.Errorf("failed to open profile zip: %w", err)
+		return "", nil, fmt.Errorf("failed to open profile zip: %w", err)
 	}
 
 	var r2xData []byte
@@ -68,26 +127,21 @@ func FetchProfileCode(code string) (string, []ProfileMod, []byte, error) {
 		if f.Name == "export.r2x" {
 			rc, err := f.Open()
 			if err != nil {
-				return "", nil, nil, fmt.Errorf("failed to open export.r2x: %w", err)
+				return "", nil, fmt.Errorf("failed to open export.r2x: %w", err)
 			}
 			r2xData, err = io.ReadAll(rc)
 			rc.Close()
 			if err != nil {
-				return "", nil, nil, fmt.Errorf("failed to read export.r2x: %w", err)
+				return "", nil, fmt.Errorf("failed to read export.r2x: %w", err)
 			}
 			break
 		}
 	}
 	if r2xData == nil {
-		return "", nil, nil, fmt.Errorf("profile zip missing export.r2x")
+		return "", nil, fmt.Errorf("profile zip missing export.r2x")
 	}
 
-	profileName, mods, err := parseR2X(string(r2xData))
-	if err != nil {
-		return "", nil, nil, err
-	}
-
-	return profileName, mods, zipData, nil
+	return parseR2X(string(r2xData))
 }
 
 // parseR2X parses the YAML-like export.r2x format.
