@@ -10,6 +10,8 @@ type Package struct {
 	IsDeprecated      bool      `json:"is_deprecated"`
 	Categories        []string  `json:"categories"`
 	Versions          []Version `json:"versions"`
+	// Source names the registry the package was resolved from.
+	Source            string    `json:"-"`
 }
 
 type Version struct {
