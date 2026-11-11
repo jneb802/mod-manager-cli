@@ -1,0 +1,428 @@
+:root {
+  color: #20242b;
+  background: #f5f7fa;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #20242b;
+  padding: 10px 12px;
+  outline: none;
+}
+
+input:focus {
+  border-color: #257c78;
+  box-shadow: 0 0 0 3px rgba(37, 124, 120, 0.16);
+}
+
+.center {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.app-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+}
+
+.sidebar {
+  background: #20242b;
+  color: #f7fafc;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  background: #f1b84b;
+  color: #20242b;
+  font-weight: 800;
+  font-size: 24px;
+}
+
+.brand h1,
+.brand p,
+.panel h2,
+.panel h3,
+.panel p {
+  margin: 0;
+}
+
+.brand h1 {
+  font-size: 22px;
+  line-height: 1.1;
+}
+
+.brand p {
+  margin-top: 3px;
+  color: #b8c1cc;
+  font-size: 13px;
+}
+
+.status-block {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #dfe6ee;
+  font-size: 14px;
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.dot.ok {
+  background: #58c08b;
+}
+
+.dot.warn {
+  background: #f1b84b;
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.facts div {
+  min-width: 0;
+}
+
+.facts dt {
+  color: #9aa6b5;
+  font-size: 12px;
+  margin-bottom: 5px;
+}
+
+.facts dd {
+  margin: 0;
+  color: #edf2f7;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workspace {
+  min-width: 0;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panel {
+  background: #ffffff;
+  border: 1px solid #dce2e9;
+  border-radius: 8px;
+  padding: 22px;
+  box-shadow: 0 1px 2px rgba(24, 32, 44, 0.06);
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.panel h2 {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.panel h3 {
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.panel p {
+  margin-top: 5px;
+  color: #657284;
+  font-size: 14px;
+}
+
+.field {
+  display: grid;
+  gap: 7px;
+  max-width: 760px;
+}
+
+.field label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #3a4654;
+}
+
+.action-row {
+  display: flex;
+  margin-top: 20px;
+}
+
+.primary-button,
+.secondary-button,
+.quiet-button,
+.small-button,
+.inline-button,
+.icon-button,
+.danger-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 6px;
+  min-height: 36px;
+  white-space: nowrap;
+}
+
+.primary-button {
+  background: #257c78;
+  color: #ffffff;
+  padding: 0 14px;
+}
+
+.secondary-button {
+  background: #394a5f;
+  color: #ffffff;
+  padding: 0 14px;
+}
+
+.quiet-button {
+  margin-top: auto;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f7fafc;
+  padding: 0 12px;
+}
+
+.small-button {
+  background: #eef5f5;
+  color: #1f6662;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.inline-button {
+  margin-top: 12px;
+  background: #f3f6f9;
+  color: #344255;
+  padding: 0 12px;
+}
+
+.icon-button,
+.danger-icon {
+  width: 36px;
+  height: 36px;
+  background: #f3f6f9;
+  color: #344255;
+  flex: 0 0 auto;
+}
+
+.danger-icon {
+  background: #fff1ef;
+  color: #b44135;
+}
+
+.compact {
+  min-width: 104px;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
+  gap: 18px;
+  align-items: start;
+}
+
+.profile-list {
+  display: grid;
+  gap: 8px;
+}
+
+.profile-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid #dce2e9;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.profile-row.active {
+  border-color: #6aa8a4;
+  background: #f0f8f7;
+}
+
+.profile-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.profile-name {
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.profile-meta {
+  color: #657284;
+  font-size: 13px;
+}
+
+.profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.active-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #257c78;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.tools-panel {
+  display: grid;
+  gap: 22px;
+}
+
+.tool-group {
+  display: grid;
+  gap: 10px;
+}
+
+.input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 8px;
+  padding: 11px 13px;
+  font-size: 14px;
+}
+
+.toast.ok {
+  background: #edf8f2;
+  color: #236247;
+  border: 1px solid #bddfcb;
+}
+
+.toast.error {
+  background: #fff1ef;
+  color: #8f2f26;
+  border: 1px solid #f0c3bc;
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 860px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    padding: 18px;
+  }
+
+  .quiet-button {
+    margin-top: 0;
+  }
+
+  .workspace {
+    padding: 18px;
+  }
+
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .profile-row,
+  .input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-actions {
+    justify-content: flex-start;
+  }
+
+  .compact {
+    width: 100%;
+  }
+}

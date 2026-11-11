@@ -18,6 +18,14 @@ mod-sources.md
 
 # Build output
 dist/
+build/
+
+# Frontend dependencies
+node_modules/
+
+# Wails generated files
+wailsjs/
+package.json.md5
 
 # Claude skills
 .claude/skills/
