@@ -151,7 +151,9 @@ func TestExtractProfileConfigs(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	extractProfileConfigs(paths, profileName, buf.Bytes(), "export file")
+	if err := extractProfileConfigs(paths, profileName, buf.Bytes(), "export file"); err != nil {
+		t.Fatal(err)
+	}
 
 	configDir := paths.ProfileConfigDir(profileName)
 	cases := map[string]string{

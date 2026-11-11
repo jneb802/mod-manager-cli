@@ -4,7 +4,7 @@
 
 # mmcli
 
-A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/) and [Hexium](https://valheim.hexium.gg), manages profiles, and launches the game with BepInEx.
+A command-line Valheim mod manager for macOS and Linux. Installs mods from [Thunderstore](https://thunderstore.io/c/valheim/), manages profiles, and launches the game with BepInEx.
 
 ## Install
 
@@ -73,18 +73,6 @@ mmcli install RandyKnapp-EpicLoot
 
 Dependencies are resolved and installed automatically.
 
-Both Thunderstore and Hexium are searched, so mods that are only published on
-one of them install the same way. A package URL from either site works too:
-
-```
-mmcli install https://thunderstore.io/c/valheim/p/RandyKnapp/EpicLoot/
-mmcli install https://valheim.hexium.gg/mods/Azumatt/AzuAutoStore
-```
-
-When both registries carry a mod, the higher version is used, so
-`mmcli check-updates` reports a newer Hexium build of a mod that also exists on
-Thunderstore.
-
 ## Managing Mods
 
 ```
@@ -102,22 +90,5 @@ mmcli profile switch <name>
 mmcli profile list
 mmcli profile delete <name>
 mmcli profile import <url|code>   # import from r2modman/Thunderstore profile code
-mmcli profile import <file.r2z>   # import from an r2modman profile export file
 mmcli profile open                # open profile folder in Finder
 ```
-
-### Importing an r2modman profile
-
-A profile can be imported either from a profile code or from an r2modman export
-file. The file form is useful when the profile was exported to disk, when it is
-larger than the 20MB the profile code service accepts, or when a shared code has
-expired.
-
-```
-mmcli profile import ./full-valheim.r2z        # keeps the name from the export
-mmcli profile import myprofile ./export.r2z    # overrides the profile name
-```
-
-Both `.r2z` archives and bare `.r2x` manifests are accepted. Mods are installed
-at the versions pinned by the export, mods the export marks as disabled stay
-disabled, and config files travel with a `.r2z`.

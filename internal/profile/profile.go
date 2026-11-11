@@ -6,18 +6,33 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"mmcli/internal/config"
 )
 
 var renamePath = os.Rename
 
+// ValidateName requires a single directory name on every supported platform.
+func ValidateName(name string) error {
+	if strings.TrimSpace(name) == "" || name == "." || name == ".." ||
+		strings.ContainsAny(name, "/\\:<>\"|?*\x00") || strings.HasSuffix(name, ".") || strings.HasSuffix(name, " ") {
+		return fmt.Errorf("invalid profile name %q: use a single directory name without path separators", name)
+	}
+	return nil
+}
+
 // Create creates a new profile directory with plugins/ and config/ subdirectories.
 // If a source profile exists, it copies BepInEx.cfg to the new profile.
 func Create(paths config.Paths, name string) error {
+	if err := ValidateName(name); err != nil {
+		return err
+	}
 	profileDir := paths.ProfileDir(name)
-	if _, err := os.Stat(profileDir); err == nil {
+	if _, err := os.Lstat(profileDir); err == nil {
 		return fmt.Errorf("profile '%s' already exists", name)
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 
 	if err := os.MkdirAll(paths.ProfilePluginsDir(name), 0755); err != nil {
