@@ -16,16 +16,25 @@ var installCmd = &cobra.Command{
 	Short: "Install a mod and its dependencies into the active profile",
 	Long: `Install a mod by Owner-Name (e.g., 'RandyKnapp-EpicLoot'), Thunderstore URL, or local path.
 Use --version to install a specific version (e.g., --version 1.78.0).
+If a different version is installed, it is replaced. Config files and the mod's
+target and enabled/disabled state are preserved. Upgrades and downgrades are supported.
 
 With --server, the mod is installed directly on the active server via the agent
 (the server downloads from Thunderstore itself). Nothing is installed locally.`,
-	Args:  cobra.ExactArgs(1),
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		clientFlag, _ := cmd.Flags().GetBool("client")
 		serverFlag, _ := cmd.Flags().GetBool("server")
+		version, _ := cmd.Flags().GetString("version")
 
 		if clientFlag && serverFlag {
 			return fmt.Errorf("cannot specify both --client and --server")
+		}
+		if version != "" && serverFlag {
+			return fmt.Errorf("--version is not supported with --server; no server files were changed")
+		}
+		if version != "" && installer.IsLocalPath(args[0]) {
+			return fmt.Errorf("--version requires a Thunderstore package, not a local path")
 		}
 
 		target := "both"
@@ -85,7 +94,6 @@ With --server, the mod is installed directly on the active server via the agent
 			return config.SaveRegistry(paths, reg)
 		}
 
-		version, _ := cmd.Flags().GetString("version")
 		if err := installer.InstallVersion(paths, cfg, &reg, args[0], target, version); err != nil {
 			return err
 		}

@@ -51,10 +51,18 @@ func InstallVersion(paths config.Paths, cfg config.Config, reg *config.Registry,
 	fullName := fmt.Sprintf("%s-%s", pkg.Owner, pkg.Name)
 	profile := cfg.ActiveProfile
 
-	// Check if already installed
-	if _, exists := reg.GetMod(profile, fullName); exists {
+	if len(pkg.Versions) == 0 || (version != "" && pkg.Versions[0].VersionNumber != version) {
+		return fmt.Errorf("package %s did not resolve requested version %q", fullName, version)
+	}
+
+	previous, replacing := reg.GetMod(profile, fullName)
+	if replacing && (version == "" || previous.Version == version) {
 		fmt.Printf("%s is already installed in profile '%s'\n", fullName, profile)
 		return nil
+	}
+	if replacing {
+		target = previous.ResolvedTarget()
+		fmt.Printf("Replacing %s v%s with v%s...\n", fullName, previous.Version, version)
 	}
 
 	// Resolve dependencies
@@ -109,8 +117,16 @@ func InstallVersion(paths config.Paths, cfg config.Config, reg *config.Registry,
 
 	// Install the main mod
 	fmt.Printf("Installing %s...\n", fullName)
-	files, err := downloadAndExtract(paths, cfg, pkg)
+	var files []string
+	if replacing {
+		files, err = replaceMod(paths, cfg, pkg, previous.Disabled || target == "server")
+	} else {
+		files, err = downloadAndExtract(paths, cfg, pkg)
+	}
 	if err != nil {
+		if replacing {
+			return fmt.Errorf("failed to replace %s (installed %s, requested %s): %w", fullName, previous.Version, version, err)
+		}
 		return fmt.Errorf("failed to install %s: %w", fullName, err)
 	}
 
@@ -118,20 +134,20 @@ func InstallVersion(paths config.Paths, cfg config.Config, reg *config.Registry,
 	depNames := []string{}
 	if len(pkg.Versions) > 0 {
 		installedVersion = pkg.Versions[0].VersionNumber
-		for _, d := range deps {
+		for _, dependency := range pkg.Versions[0].Dependencies {
+			d := thunderstore.ParseDep(dependency)
 			depNames = append(depNames, fmt.Sprintf("%s-%s", d.Owner, d.Name))
 		}
 	}
 
-	reg.SetMod(profile, config.ModEntry{
-		Owner:        pkg.Owner,
-		Name:         pkg.Name,
-		Version:      installedVersion,
-		IsDependency: false,
-		Files:        files,
-		Dependencies: depNames,
-		Target:       target,
-	})
+	mod := previous
+	mod.Owner = pkg.Owner
+	mod.Name = pkg.Name
+	mod.Version = installedVersion
+	mod.Files = files
+	mod.Dependencies = depNames
+	mod.Target = target
+	reg.SetMod(profile, mod)
 
 	// Auto-disable server-only mods locally (they'd error in the local game)
 	if target == "server" {
@@ -432,6 +448,9 @@ func extractMod(paths config.Paths, cfg config.Config, owner, name, zipPath stri
 		}
 
 		fname := filepath.ToSlash(f.Name)
+		if !filepath.IsLocal(fname) {
+			return nil, fmt.Errorf("invalid archive path %q", fname)
+		}
 		baseName := filepath.Base(fname)
 
 		// Skip metadata
@@ -445,6 +464,9 @@ func extractMod(paths config.Paths, cfg config.Config, owner, name, zipPath stri
 		for _, ov := range overrides {
 			if len(fname) > len(ov.prefix) && strings.EqualFold(fname[:len(ov.prefix)], ov.prefix) {
 				relPath := fname[len(ov.prefix):]
+				if !filepath.IsLocal(relPath) {
+					return nil, fmt.Errorf("invalid archive path %q", fname)
+				}
 				destPath = filepath.Join(ov.dir, relPath)
 				matched = true
 				break
@@ -489,23 +511,7 @@ func extractZipFile(f *zip.File, destPath string) error {
 	return err
 }
 
-// removeModFilesKeepConfig removes a mod's plugin/patcher/monomod/core files but preserves configs.
-func removeModFilesKeepConfig(paths config.Paths, cfg config.Config, mod config.ModEntry) {
-	modSubdir := fmt.Sprintf("%s-%s", mod.Owner, mod.Name)
-	profile := cfg.ActiveProfile
-
-	for _, dir := range []string{
-		paths.ProfilePluginsDir(profile),
-		paths.ProfilePatchersDir(profile),
-		paths.ProfileMonomodDir(profile),
-		paths.ProfileCoreDir(profile),
-	} {
-		os.RemoveAll(filepath.Join(dir, modSubdir))
-	}
-}
-
-// Update removes a mod's non-config files, removes its registry entry, and reinstalls the latest version.
-// Config files are preserved so user customizations are not lost.
+// Update installs the latest version while preserving the installed mod's settings and configs.
 func Update(paths config.Paths, cfg config.Config, reg *config.Registry, modName string) error {
 	profile := cfg.ActiveProfile
 	mod, exists := findMod(reg, profile, modName)
@@ -513,12 +519,14 @@ func Update(paths config.Paths, cfg config.Config, reg *config.Registry, modName
 		return fmt.Errorf("mod '%s' not found", modName)
 	}
 
-	fullName := mod.FullName()
-	existingTarget := mod.ResolvedTarget()
-	removeModFilesKeepConfig(paths, cfg, mod)
-	reg.RemoveMod(profile, fullName)
-
-	return Install(paths, cfg, reg, fullName, existingTarget)
+	pkg, err := thunderstore.GetPackage(mod.Owner, mod.Name)
+	if err != nil {
+		return err
+	}
+	if len(pkg.Versions) == 0 {
+		return fmt.Errorf("package %s has no versions", mod.FullName())
+	}
+	return InstallVersion(paths, cfg, reg, mod.FullName(), mod.ResolvedTarget(), pkg.Versions[0].VersionNumber)
 }
 
 // IsLocalPath returns true if the string refers to an existing file or directory.
