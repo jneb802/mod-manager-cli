@@ -116,7 +116,11 @@ func InstallVersion(paths config.Paths, cfg config.Config, reg *config.Registry,
 	}
 
 	// Install the main mod
-	fmt.Printf("Installing %s...\n", fullName)
+	if pkg.Source != "" && pkg.Source != "Thunderstore" {
+		fmt.Printf("Installing %s from %s...\n", fullName, pkg.Source)
+	} else {
+		fmt.Printf("Installing %s...\n", fullName)
+	}
 	var files []string
 	if replacing {
 		files, err = replaceMod(paths, cfg, pkg, previous.Disabled || target == "server")
