@@ -571,8 +571,13 @@ func preflightCheck(localMods []config.ModEntry, serverMods []agentapi.ModInfo) 
 	return warnings
 }
 
-// detectBepInExVersion checks the cache dir for a BepInExPack zip and extracts the version.
-func detectBepInExVersion(paths config.Paths) string {
+// detectBepInExVersion returns the BepInExPack version recorded at install time.
+// Installs from older mmcli releases did not record it, so fall back to the
+// cached BepInExPack zip name.
+func detectBepInExVersion(paths config.Paths, cfg config.Config) string {
+	if cfg.BepInExVersion != "" {
+		return cfg.BepInExVersion
+	}
 	entries, err := os.ReadDir(paths.CacheDir)
 	if err != nil {
 		return ""

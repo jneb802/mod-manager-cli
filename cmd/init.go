@@ -4,12 +4,10 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"mmcli/internal/bepinex"
 	"mmcli/internal/config"
 	"mmcli/internal/profile"
 )
@@ -71,23 +69,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("\033[32mdone\033[0m")
 
-	// Download and install BepInEx
-	fmt.Print("Fetching latest BepInEx version... ")
-	version, downloadURL, err := bepinex.LatestVersion()
-	if err != nil {
-		fmt.Println("\033[31mfailed\033[0m")
-		return err
-	}
-	fmt.Printf("\033[32mv%s\033[0m\n", version)
-
-	fmt.Print("Downloading BepInEx... ")
-	zipPath, err := bepinex.Download(paths, downloadURL, version)
-	if err != nil {
-		fmt.Println("\033[31mfailed\033[0m")
-		return err
-	}
-	fmt.Println("\033[32mdone\033[0m")
-
 	// Create default profile before install so Windows can place its BepInEx tree
 	// into the profile-local directory layout.
 	fmt.Print("Creating default profile... ")
@@ -99,28 +80,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println("\033[32mdone\033[0m")
 
-	fmt.Print("Installing BepInEx... ")
-	if err := bepinex.Install(paths, zipPath); err != nil {
-		fmt.Println("\033[31mfailed\033[0m")
+	bepinexVersion, err := installBepInEx(paths, []string{"default"})
+	if err != nil {
 		return err
-	}
-	fmt.Println("\033[32mdone\033[0m")
-
-	if runtime.GOOS == "darwin" {
-		fmt.Print("Patching run_bepinex.sh for macOS... ")
-		if err := bepinex.PatchRunScript(paths); err != nil {
-			fmt.Println("\033[31mfailed\033[0m")
-			return err
-		}
-		if err := bepinex.MakeExecutable(paths); err != nil {
-			fmt.Println("\033[31mfailed\033[0m")
-			return err
-		}
-		fmt.Println("\033[32mdone\033[0m")
-
-		fmt.Print("Removing macOS quarantine attributes... ")
-		bepinex.RemoveQuarantine(paths)
-		fmt.Println("\033[32mdone\033[0m")
 	}
 
 	fmt.Print("Activating default profile... ")
@@ -132,9 +94,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	// Save config
 	cfg := config.Config{
-		ActiveProfile: "default",
-		ValheimPath:   valheimPath,
-		Initialized:   true,
+		ActiveProfile:  "default",
+		ValheimPath:    valheimPath,
+		Initialized:    true,
+		BepInExVersion: bepinexVersion,
 	}
 	if err := config.Save(paths, cfg); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)

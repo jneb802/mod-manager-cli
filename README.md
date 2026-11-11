@@ -49,6 +49,16 @@ mmcli init
 
 This detects your Valheim install, installs BepInEx, and creates a default profile.
 
+## Updating BepInEx
+
+```
+mmcli bepinex update
+```
+
+Installs the latest BepInExPack_Valheim over your current install. Mods, profiles, and your `BepInEx.cfg` are kept. Close Valheim first.
+
+On Apple Silicon Macs, BepInExPack 5.4.2360 and later run Valheim natively instead of under Rosetta. Installs made by older mmcli versions still use Rosetta until you run this command. If mods fail to load natively, set `archpreference="x86_64"` in `run_bepinex.sh` inside the Valheim folder to go back to Rosetta.
+
 ## Interactive TUI
 
 ```

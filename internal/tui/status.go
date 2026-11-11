@@ -113,7 +113,7 @@ func (m model) buildStatusItems() []statusItem {
 		tooltip: "Current mmcli version.",
 	})
 
-	bepVer := detectBepInExVersion(m.paths)
+	bepVer := detectBepInExVersion(m.paths, m.cfg)
 	if bepVer == "" {
 		bepVer = "\033[2m–\033[0m"
 	}
