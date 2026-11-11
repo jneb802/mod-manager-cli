@@ -91,9 +91,9 @@ func TestExpandHome(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := expandHome(tt.input)
+			got := ExpandHome(tt.input)
 			if got != tt.expected {
-				t.Errorf("expandHome(%q) = %q, want %q", tt.input, got, tt.expected)
+				t.Errorf("ExpandHome(%q) = %q, want %q", tt.input, got, tt.expected)
 			}
 		})
 	}

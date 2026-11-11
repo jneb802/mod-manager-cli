@@ -535,11 +535,12 @@ func Update(paths config.Paths, cfg config.Config, reg *config.Registry, modName
 
 // IsLocalPath returns true if the string refers to an existing file or directory.
 func IsLocalPath(s string) bool {
-	_, err := os.Stat(expandHome(s))
+	_, err := os.Stat(ExpandHome(s))
 	return err == nil
 }
 
-func expandHome(s string) string {
+// ExpandHome resolves a leading ~ in a path.
+func ExpandHome(s string) string {
 	if s == "~" {
 		if home, err := os.UserHomeDir(); err == nil {
 			return home
@@ -559,7 +560,7 @@ func InstallLocal(paths config.Paths, cfg config.Config, reg *config.Registry, s
 		target = "both"
 	}
 
-	absPath, err := filepath.Abs(expandHome(srcPath))
+	absPath, err := filepath.Abs(ExpandHome(srcPath))
 	if err != nil {
 		return fmt.Errorf("invalid path: %w", err)
 	}

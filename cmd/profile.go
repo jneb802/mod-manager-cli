@@ -186,13 +186,21 @@ be deleted; switch to a different profile first.`,
 }
 
 var profileImportCmd = &cobra.Command{
-	Use:   "import <name> <modpack> | import <profile-code>",
-	Short: "Create a profile from a modpack or profile code",
-	Long: `Create a new profile and install mods from a Thunderstore modpack or profile code.
+	Use:   "import <name> <modpack> | import <profile-code> | import [name] <file.r2z>",
+	Short: "Create a profile from a modpack, profile code, or exported file",
+	Long: `Create a new profile and install mods from a Thunderstore modpack, an
+r2modman profile code, or an r2modman profile export file (.r2z or .r2x).
+
+A profile code and an export file describe the same thing; the file is useful
+when the profile was exported to disk, is larger than the 20MB the profile code
+service accepts, or when the code has expired. Files keep the profile name
+recorded in the export unless a name is given.
 
 Examples:
   mmcli profile import mypack Author-ModpackName
-  mmcli profile import a1b2c3d4-e5f6-7890-abcd-ef1234567890`,
+  mmcli profile import a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  mmcli profile import ./full-valheim.r2z
+  mmcli profile import myprofile ./full-valheim.r2z`,
 	Args: cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		paths, cfg, err := loadConfig()
@@ -205,8 +213,16 @@ Examples:
 			return importProfileCode(paths, cfg, args[0])
 		}
 
+		// Profile export file import, with an optional profile name in front.
+		if len(args) == 1 && thunderstore.IsProfileFile(args[0]) {
+			return importProfileFile(paths, cfg, args[0], "")
+		}
+		if len(args) == 2 && thunderstore.IsProfileFile(args[1]) {
+			return importProfileFile(paths, cfg, args[1], args[0])
+		}
+
 		if len(args) != 2 {
-			return fmt.Errorf("expected <name> <modpack> or a profile code UUID")
+			return fmt.Errorf("expected <name> <modpack>, a profile code UUID, or a .r2z/.r2x file")
 		}
 
 		profileName := args[0]
@@ -283,7 +299,32 @@ func importProfileCode(paths config.Paths, cfg config.Config, code string) error
 	if err != nil {
 		return err
 	}
+	return importProfileExport(paths, cfg, profileName, mods, zipData, "profile code")
+}
 
+// importProfileFile imports an r2modman .r2z or .r2x export from disk. When
+// name is empty the profile name recorded in the export is used.
+func importProfileFile(paths config.Paths, cfg config.Config, path string, name string) error {
+	path = installer.ExpandHome(path)
+	if _, err := os.Stat(path); err != nil {
+		return fmt.Errorf("profile file not found: %s", path)
+	}
+
+	fmt.Printf("Reading profile export %s...\n", filepath.Base(path))
+	profileName, mods, zipData, err := thunderstore.ReadProfileFile(path)
+	if err != nil {
+		return err
+	}
+	if name != "" {
+		profileName = name
+	}
+	return importProfileExport(paths, cfg, profileName, mods, zipData, "export file")
+}
+
+// importProfileExport creates a profile from a parsed r2modman export and
+// installs its mods at the pinned versions. source names where the export came
+// from, for user-facing output.
+func importProfileExport(paths config.Paths, cfg config.Config, profileName string, mods []thunderstore.ProfileMod, zipData []byte, source string) error {
 	// Filter out BepInExPack
 	var filtered []thunderstore.ProfileMod
 	for _, m := range mods {
@@ -369,7 +410,7 @@ func importProfileCode(paths config.Paths, cfg config.Config, code string) error
 	}
 
 	// Extract config files from the zip
-	extractProfileConfigs(paths, profileName, zipData)
+	extractProfileConfigs(paths, profileName, zipData, source)
 
 	// Restore original active profile
 	cfg.ActiveProfile = origProfile
@@ -380,7 +421,7 @@ func importProfileCode(paths config.Paths, cfg config.Config, code string) error
 		return err
 	}
 
-	fmt.Printf("\n\033[32mProfile '%s' created with %d mods from profile code.\033[0m\n", profileName, len(filtered))
+	fmt.Printf("\n\033[32mProfile '%s' created with %d mods from %s.\033[0m\n", profileName, len(filtered), source)
 	fmt.Printf("Run \033[36mmmcli profile switch %s\033[0m to activate it.\n", profileName)
 	return nil
 }
@@ -412,7 +453,7 @@ func init() {
 
 // extractProfileConfigs extracts config files from a profile code zip into the profile's config dir.
 // r2modman exports use a "BepInEx/config/" prefix; older or alternate exports may use "config/".
-func extractProfileConfigs(paths config.Paths, profileName string, zipData []byte) {
+func extractProfileConfigs(paths config.Paths, profileName string, zipData []byte, source string) {
 	zr, err := zip.NewReader(bytes.NewReader(zipData), int64(len(zipData)))
 	if err != nil {
 		return
@@ -457,7 +498,7 @@ func extractProfileConfigs(paths config.Paths, profileName string, zipData []byt
 		rc.Close()
 	}
 	if count > 0 {
-		fmt.Printf("Extracted %d config file(s) from profile code.\n", count)
+		fmt.Printf("Extracted %d config file(s) from %s.\n", count, source)
 	}
 }
 
